@@ -1,5 +1,6 @@
 import sys
 from pymavlink import mavutil
+from time import time, sleep
 
 
 def print_usage():
@@ -33,12 +34,24 @@ if __name__ == '__main__':
         # Start a connection listening to a connection string TODO: Test this more
         the_connection = mavutil.mavlink_connection(connection_string, source_system=nrf52833_system, source_component=nrf52833_component)
 
+    def send_heartbeat():
+        base_mode = 0
+        custom_mode = 0
+        system_status = mavutil.mavlink.MAV_STATE_ACTIVE if True \
+            else mavutil.mavlink.MAV_STATE_STANDBY
+
+        the_connection.mav.heartbeat_send(
+            type=mavutil.mavlink.MAV_TYPE_ONBOARD_CONTROLLER,
+            autopilot=mavutil.mavlink.MAV_AUTOPILOT_INVALID,
+            base_mode=base_mode,
+            custom_mode=custom_mode,
+            system_status=system_status)
+
     print('Interface opened.')
     print('Waiting for heartbeat...')
     # Wait for the first heartbeat
     #   This sets the system and component ID of remote system for the link
     the_connection.wait_heartbeat()
-
     print("Heartbeat from system (system %u component %u)" % (the_connection.target_system, the_connection.target_system))
 
     # Request gps data drome drone
@@ -51,13 +64,26 @@ if __name__ == '__main__':
         gps_update_frequecy, 1)
 
     # Test sending some data
-    the_connection.mav.system_time_send(190048103001, 0)
-    the_connection.mav.data16_send(169, 3, b'aaaabbbbccccdddd')
+    # the_connection.mav.system_time_send(190048103001, 0)
+    # the_connection.mav.data16_send(169, 3, b'aaaabbbbccccdddd')
 
     drone_gps = None
 
+    last_heartbeat = 0
+
     while True:
-        msg = the_connection.recv_match(blocking=True)
+        if time() > last_heartbeat + 1:
+            last_heartbeat = time()
+            send_heartbeat()
+
+        msg = the_connection.recv_msg()
+
+        if msg is None:
+            sleep(0.02)
+            continue
+
         if msg.name is 'GLOBAL_POSITION_INT':
+            print(msg)
+        else:
             print(msg)
     #the_connection.post_message()
