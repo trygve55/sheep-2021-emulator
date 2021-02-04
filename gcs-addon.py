@@ -22,20 +22,20 @@ if __name__ == '__main__':
         print_usage()
 
     connection_string = sys.argv[1]
-    nrf52833_system = 1 #MAVLINK system id for the module. Id 1 is the same as the drone.
-    nrf52833_component = 99 #MAVLINK component id for the module. Id 99 is a non reserved id.
+    nrf52833_system = 255 #MAVLINK system id for the module. Id 1 is the same as the drone.
+    nrf52833_component = 98 #MAVLINK component id for the module. Id 98 is a non reserved id.
     the_connection = None
 
     if 'com' in connection_string or 'COM' in connection_string or '/dev/tty' in connection_string:
         if len(sys.argv) == 3:
             baud = sys.argv[2]
             # Start a connection listening to a serial port
-            the_connection = mavutil.mavlink_connection(connection_string, baud=baud, dialect='sheeprtt', source_system=nrf52833_system, source_component=nrf52833_component)
+            the_connection = mavutil.mavlink_connection(connection_string, baud=baud, source_system=nrf52833_system, source_component=nrf52833_component)
         else:
             print_usage()
     else:
         # Start a connection listening to a connection string TODO: Test this more
-        the_connection = mavutil.mavlink_connection(connection_string, dialect='sheeprtt', source_system=nrf52833_system, source_component=nrf52833_component)
+        the_connection = mavutil.mavlink_connection(connection_string, source_system=nrf52833_system, source_component=nrf52833_component)
 
     def send_heartbeat():
         base_mode = 0
@@ -60,8 +60,6 @@ if __name__ == '__main__':
     # Request gps data drome drone
     gps_update_frequecy = 1 # How often to request gps information in hertz.
 
-    mavutil
-
     the_connection.mav.request_data_stream_send(
         the_connection.target_system,
         the_connection.target_component,
@@ -72,26 +70,19 @@ if __name__ == '__main__':
     # the_connection.mav.system_time_send(190048103001, 0)
     # the_connection.mav.data16_send(169, 3, b'aaaabbbbccccdddd')
 
-    drone_gps = None
-
-    last_heartbeat = 0
-
     while True:
-        if time() > last_heartbeat + 1:
-            last_heartbeat = time()
-            send_heartbeat()
 
-            the_connection.mav.sheep_rtt_data_send(0, 1337, 1337, 420, 69, 12)
-            the_connection.mav.sheep_rtt_ack_send(int(0))
+        msg = the_connection.recv_match(blocking=False)
 
-        msg = the_connection.recv_msg()
-
-        if msg is None or msg.get_type() is 'BAD_DATA':
+        if msg is None:
             sleep(0.02)
             continue
 
-        if msg.name is 'GLOBAL_POSITION_INT':
+        if msg.name is 'sheep_rtt_data':
             print(msg)
+            the_connection.mav.sheep_rtt_ack_send(int(0))
+            #the_connection.mav.data16_send(169, 3, b'aaaabbbbccccdddd')
         else:
+            pass
             print(msg)
     #the_connection.post_message()
