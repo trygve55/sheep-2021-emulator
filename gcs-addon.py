@@ -30,12 +30,12 @@ if __name__ == '__main__':
         if len(sys.argv) == 3:
             baud = sys.argv[2]
             # Start a connection listening to a serial port
-            the_connection = mavutil.mavlink_connection(connection_string, baud=baud, source_system=nrf52833_system, source_component=nrf52833_component)
+            the_connection = mavutil.mavlink_connection(connection_string, baud=baud, dialect="sheeprtt_ardupilotmega", source_system=nrf52833_system, source_component=nrf52833_component)
         else:
             print_usage()
     else:
         # Start a connection listening to a connection string TODO: Test this more
-        the_connection = mavutil.mavlink_connection(connection_string, source_system=nrf52833_system, source_component=nrf52833_component)
+        the_connection = mavutil.mavlink_connection(connection_string, dialect="sheeprtt_ardupilotmega", source_system=nrf52833_system, source_component=nrf52833_component)
 
     def send_heartbeat():
         base_mode = 0
@@ -78,11 +78,20 @@ if __name__ == '__main__':
             sleep(0.02)
             continue
 
-        if msg.name is 'sheep_rtt_data':
+        if msg.name is 'SHEEP_RTT_DATA':
             print(msg)
-            the_connection.mav.sheep_rtt_ack_send(int(0))
-            #the_connection.mav.data16_send(169, 3, b'aaaabbbbccccdddd')
+
+            # Send the sheepRTT ack packet directly.
+            the_connection.mav.sheep_rtt_ack_send(msg.seq)
+
+        if msg.name is 'DATA32' and msg.type == 129 and msg.len == 31:
+            msg = the_connection.mav.parse_char(msg.data[0:-1])
+            print(msg)
+
+            # Pack sheepRTT ack packet inside a data16 packet and send it. With zero padding.
+            sheep_rtt_ack_packet = the_connection.mav.sheep_rtt_ack_encode(msg.seq).pack(the_connection.mav) + b'\x00\x00\x00'
+            the_connection.mav.data16_send(130, 13, sheep_rtt_ack_packet)
         else:
             pass
-            print(msg)
+            # print(msg)
     #the_connection.post_message()

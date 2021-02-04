@@ -31,13 +31,13 @@ if __name__ == '__main__':
         if len(sys.argv) == 3:
             baud = sys.argv[2]
             # Start a connection listening to a serial port
-            the_connection = mavutil.mavlink_connection(connection_string, baud=baud, dialect='sheeprtt', source_system=drone_system,
+            the_connection = mavutil.mavlink_connection(connection_string, baud=baud, dialect='sheeprtt_ardupilotmega', source_system=drone_system,
                                                         source_component=drone_component)
         else:
             print_usage()
     else:
         # Start a connection listening to a connection string.
-        the_connection = mavutil.mavlink_connection(connection_string, dialect='sheeprtt', source_system=drone_system,
+        the_connection = mavutil.mavlink_connection(connection_string, dialect='sheeprtt_ardupilotmega', source_system=drone_system,
                                                     source_component=drone_component)
 
     print('Interface opened.')
@@ -110,7 +110,7 @@ if __name__ == '__main__':
         last_move = new_move
 
         if time() > last_heartbeat + 1:
-            print("heartbeat send")
+            # print("heartbeat send")
             last_heartbeat = time()
             send_heartbeat()
 
