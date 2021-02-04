@@ -3,8 +3,8 @@ Python scripts to emulate different parts of the sheepRTT system. Only tested on
 
 ## Install
 ```bash
-git clone https://github.com/trygve55/sheep-2021-emulator
-git submodule update --init --recursive
+git clone --recursive-submodules https://github.com/trygve55/sheep-2021-emulator
+cd sheep-2021-emulator
 python3 -m venv .
 source bin/activate
 pip install lxml future pyserial
