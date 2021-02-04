@@ -4,6 +4,7 @@ import math
 from pymavlink import mavutil
 from time import time, sleep
 
+# Force MAVLINK 2.0
 os.environ["MAVLINK20"] = "1"
 
 
@@ -91,13 +92,6 @@ if __name__ == '__main__':
         drone['lon'] += time_delta * drone['vy'] / 100 / (40075000 * math.cos(drone['lat'] * math.pi / 180) / 360)  # Convert cm/s into degrees
         drone['alt'] += time_delta * drone['vz'] / 100  # Convert cm/s into m
 
-    # print('Waiting for heartbeat...')
-    # Wait for the first heartbeat
-    #   This sets the system and component ID of remote system for the link
-    # the_connection.wait_heartbeat()
-
-    # print("Heartbeat from system (system %u component %u)" % (the_connection.target_system, the_connection.target_system))
-
     last_heartbeat = 0
     last_move = time()
     last_send_position = 0
@@ -144,4 +138,3 @@ if __name__ == '__main__':
                 }
         else:
             print(msg)
-    # the_connection.post_message()

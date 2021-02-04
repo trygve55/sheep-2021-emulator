@@ -99,8 +99,14 @@ if __name__ == '__main__':
 
         if msg.name is 'GLOBAL_POSITION_INT':
             print(msg)
-        elif msg.name is 'DATA16' and msg.type == 130 and msg.len == 13:
-            msg = the_connection.mav.parse_char(msg.data[0:-1])
+        elif msg.name is 'SHEEP_RTT_ACK':
             print(msg)
+
+            # TODO: Process sheepRTT ack.
+        elif msg.name is 'DATA16' and msg.type == 130 and msg.len == 13:
+            msg = the_connection.mav.parse_char(msg.data[0:-1])  # Unpack encapsulated sheepRTT data.
+            print(msg)
+
+            # TODO: Process sheepRTT ack.
         else:
             print(msg)

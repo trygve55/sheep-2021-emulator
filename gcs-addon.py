@@ -3,6 +3,7 @@ import sys
 from pymavlink import mavutil
 from time import time, sleep
 
+# Force MAVLINK 2.0
 os.environ["MAVLINK20"] = "1"
 
 
@@ -22,8 +23,8 @@ if __name__ == '__main__':
         print_usage()
 
     connection_string = sys.argv[1]
-    nrf52833_system = 255 #MAVLINK system id for the module. Id 1 is the same as the drone.
-    nrf52833_component = 98 #MAVLINK component id for the module. Id 98 is a non reserved id.
+    nrf52833_system = 255  # MAVLINK system id for the module. Id 1 is the same as the drone.
+    nrf52833_component = 98  # MAVLINK component id for the module. Id 98 is a non reserved id.
     the_connection = None
 
     if 'com' in connection_string or 'COM' in connection_string or '/dev/tty' in connection_string:
@@ -57,21 +58,7 @@ if __name__ == '__main__':
     the_connection.wait_heartbeat()
     print("Heartbeat from system (system %u component %u)" % (the_connection.target_system, the_connection.target_system))
 
-    # Request gps data drome drone
-    gps_update_frequecy = 1 # How often to request gps information in hertz.
-
-    the_connection.mav.request_data_stream_send(
-        the_connection.target_system,
-        the_connection.target_component,
-        mavutil.mavlink.MAV_DATA_STREAM_POSITION,
-        gps_update_frequecy, 1)
-
-    # Test sending some data
-    # the_connection.mav.system_time_send(190048103001, 0)
-    # the_connection.mav.data16_send(169, 3, b'aaaabbbbccccdddd')
-
     while True:
-
         msg = the_connection.recv_match(blocking=False)
 
         if msg is None:
@@ -81,12 +68,19 @@ if __name__ == '__main__':
         if msg.name is 'SHEEP_RTT_DATA':
             print(msg)
 
+            # TODO: Process sheepRTT data packet.
+
             # Send the sheepRTT ack packet directly.
             the_connection.mav.sheep_rtt_ack_send(msg.seq)
 
-        if msg.name is 'DATA32' and msg.type == 129 and msg.len == 31:
-            msg = the_connection.mav.parse_char(msg.data[0:-1])
+        elif msg.name is 'DATA32' and msg.type == 129 and msg.len == 31:
+            msg = the_connection.mav.parse_char(msg.data[0:-1])  # Unpack encapsulated sheepRTT data.
             print(msg)
+
+            # TODO: Process sheepRTT data packet.
+
+            # Send the sheepRTT ack packet directly.
+            the_connection.mav.sheep_rtt_ack_send(msg.seq)
 
             # Pack sheepRTT ack packet inside a data16 packet and send it. With zero padding.
             sheep_rtt_ack_packet = the_connection.mav.sheep_rtt_ack_encode(msg.seq).pack(the_connection.mav) + b'\x00\x00\x00'
@@ -94,4 +88,3 @@ if __name__ == '__main__':
         else:
             pass
             # print(msg)
-    #the_connection.post_message()
