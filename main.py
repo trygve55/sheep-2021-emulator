@@ -84,12 +84,14 @@ if __name__ == '__main__':
             sheep_rtt_data_packet = the_connection.mav.sheep_rtt_data_encode(0, 1337, 1337, 420, 69, 12).pack(the_connection.mav) + b'\x00'
             the_connection.mav.data32_send(129, 31, sheep_rtt_data_packet)
 
+            '''
             # Send the sheepRTT ack packet directly.
             the_connection.mav.sheep_rtt_ack_send(int(0))
 
             # Pack sheepRTT ack packet inside a data16 packet and send it. With zero padding.
             sheep_rtt_ack_packet = the_connection.mav.sheep_rtt_ack_encode(0).pack(the_connection.mav) + b'\x00\x00\x00'
             the_connection.mav.data16_send(130, 13, sheep_rtt_ack_packet)
+            '''
 
         msg = the_connection.recv_msg()
 
