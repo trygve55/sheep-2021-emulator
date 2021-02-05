@@ -1,47 +1,54 @@
-import os
 import sys
 import math
 from pymavlink import mavutil
 from time import time, sleep
-
-# Force MAVLINK 2.0
-os.environ["MAVLINK20"] = "1"
+from common import print_usage, init_mavlink
 
 
-def print_usage():
-    print('Invalid number of arguments.\n\n'
-          'Usage:\n'
-          '$ python main.py CONNECTIONSTRING [BAUD]\n\n'
-          'Examples:\n'
-          '$ python main.py /dev/ttyUSB0 57600\n'
-          '$ python main.py udpout:localhost:14540\n'
-          'More examples at https://mavlink.io/en/mavgen_python/')
-    exit()
+def send_heartbeat(the_connection):
+    base_mode = mavutil.mavlink.MAV_MODE_FLAG_MANUAL_INPUT_ENABLED + \
+                mavutil.mavlink.MAV_MODE_FLAG_STABILIZE_ENABLED + \
+                mavutil.mavlink.MAV_MODE_FLAG_CUSTOM_MODE_ENABLED
+    custom_mode = 0
+    system_status = mavutil.mavlink.MAV_STATE_ACTIVE if drone['active'] \
+        else mavutil.mavlink.MAV_STATE_STANDBY
+
+    the_connection.mav.heartbeat_send(
+        type=mavutil.mavlink.MAV_TYPE_QUADROTOR,
+        autopilot=mavutil.mavlink.MAV_AUTOPILOT_ARDUPILOTMEGA,
+        base_mode=base_mode,
+        custom_mode=custom_mode,
+        system_status=system_status)
+
+
+def send_data_stream_position(the_connection):
+    the_connection.mav.global_position_int_send(
+        time_boot_ms=0,
+        lat=int(drone['lat'] * 10**7),  # Converts degrees into degreesE7
+        lon=int(drone['lon'] * 10**7),  # Converts degrees into degreesE7
+        alt=int(drone['alt'] * 1000),  # Converts m into mm
+        relative_alt=int(drone['alt'] * 1000),  # Converts m into mm
+        vx=drone['vx'],
+        vy=drone['vy'],
+        vz=drone['vz'],
+        hdg=65535)
+
+
+def move_drone(drone, time_delta):
+    drone['lat'] += time_delta * drone['vx'] / 100 / 111320  # Convert cm/s into degrees
+    drone['lon'] += time_delta * drone['vy'] / 100 / (40075000 * math.cos(drone['lat'] * math.pi / 180) / 360)  # Convert cm/s into degrees
+    drone['alt'] += time_delta * drone['vz'] / 100  # Convert cm/s into m
 
 
 if __name__ == '__main__':
     if len(sys.argv) != 2 and len(sys.argv) != 3:
-        print_usage()
+        print_usage("")
 
     connection_string = sys.argv[1]
+    baud = sys.argv[2] if len(sys.argv) == 3 else None
     drone_system = 1  # MAVLINK system id for the drone. Id 1 is the same as the drone.
     drone_component = 1  # MAVLINK component id for the drone. Id 1 is the autopilot.
-    the_connection = None
-
-    if 'com' in connection_string or 'COM' in connection_string or '/dev/tty' in connection_string:
-        if len(sys.argv) == 3:
-            baud = sys.argv[2]
-            # Start a connection listening to a serial port
-            the_connection = mavutil.mavlink_connection(connection_string, baud=baud, dialect='sheeprtt_ardupilotmega', source_system=drone_system,
-                                                        source_component=drone_component)
-        else:
-            print_usage()
-    else:
-        # Start a connection listening to a connection string.
-        the_connection = mavutil.mavlink_connection(connection_string, dialect='sheeprtt_ardupilotmega', source_system=drone_system,
-                                                    source_component=drone_component)
-
-    print('Interface opened.')
+    the_connection = init_mavlink(drone_system, drone_component, connection_string, baud)
 
     # Defining drone information
     drone = {
@@ -59,44 +66,11 @@ if __name__ == '__main__':
         }
     }
 
-    def send_heartbeat():
-        base_mode = mavutil.mavlink.MAV_MODE_FLAG_MANUAL_INPUT_ENABLED + \
-                    mavutil.mavlink.MAV_MODE_FLAG_STABILIZE_ENABLED + \
-                    mavutil.mavlink.MAV_MODE_FLAG_CUSTOM_MODE_ENABLED
-        custom_mode = 0
-        system_status = mavutil.mavlink.MAV_STATE_ACTIVE if drone['active'] \
-            else mavutil.mavlink.MAV_STATE_STANDBY
-
-        the_connection.mav.heartbeat_send(
-            type=mavutil.mavlink.MAV_TYPE_QUADROTOR,
-            autopilot=mavutil.mavlink.MAV_AUTOPILOT_ARDUPILOTMEGA,
-            base_mode=base_mode,
-            custom_mode=custom_mode,
-            system_status=system_status)
-
-    def send_data_stream_position():
-        the_connection.mav.global_position_int_send(
-            time_boot_ms=0,
-            lat=int(drone['lat'] * 10**7),  # Converts degrees into degreesE7
-            lon=int(drone['lon'] * 10**7),  # Converts degrees into degreesE7
-            alt=int(drone['alt'] * 1000),  # Converts m into mm
-            relative_alt=int(drone['alt'] * 1000),  # Converts m into mm
-            vx=drone['vx'],
-            vy=drone['vy'],
-            vz=drone['vz'],
-            hdg=65535,
-        )
-
-    def move_drone(time_delta):
-        drone['lat'] += time_delta * drone['vx'] / 100 / 111320  # Convert cm/s into degrees
-        drone['lon'] += time_delta * drone['vy'] / 100 / (40075000 * math.cos(drone['lat'] * math.pi / 180) / 360)  # Convert cm/s into degrees
-        drone['alt'] += time_delta * drone['vz'] / 100  # Convert cm/s into m
-
     last_heartbeat = 0
     last_move = time()
     last_send_position = 0
 
-    send_heartbeat()
+    send_heartbeat(the_connection)
 
     while True:
         new_move = time()
