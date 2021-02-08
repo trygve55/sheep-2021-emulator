@@ -2,6 +2,8 @@ import sys
 from pymavlink import mavutil
 from time import time, sleep
 from common import print_usage, init_mavlink, wait_heartbeat
+import random
+from math import sqrt, fabs
 
 
 def send_heartbeat(the_connection, active=True):
@@ -16,6 +18,96 @@ def send_heartbeat(the_connection, active=True):
         base_mode=base_mode,
         custom_mode=custom_mode,
         system_status=system_status)
+
+
+class SheepRTTEmulator:
+    class Sample:
+        def __init__(self, sheep_id, lat, lon, alt, dist):
+            self.sheep_id = sheep_id
+            self.lat = lat
+            self.lon = lon
+            self.alt = alt
+            self.dist = dist
+
+    class Sheep:
+        def __init__(self, sheep_id, lat, lon, alt):
+            self.sheep_id = sheep_id
+            self.lat = lat
+            self.lon = lon
+            self.alt = alt
+
+    def __init__(self, max_ping_range=250, max_gen_dist=1000, quantity=25, seed=None):
+        self.max_ping_range = max_ping_range
+        self.max_gen_dist = max_gen_dist
+        self.quantity = quantity
+        self.seed = seed
+
+        self.lat = 0
+        self.lon = 0
+        self.alt = 0
+        self.simulated_sheep = []
+        self.samples = []
+        self.ping_seq = 0
+        self.send_seq = 0
+        self.init_complete = False
+
+    def late_init(self):
+        self.generate_sheep(max_gen_dist=self.max_gen_dist, quantity=self.quantity, )
+        self.init_complete = True
+
+    def update_position_from_msg(self, msg):
+        self.lat = msg.lat
+        self.lon = msg.lon
+        self.alt = msg.alt
+
+        # Check if late_init is not complete and valid gps signal is received.
+        if not self.init_complete and not (self.lat == 0 and self.lon == 0 and self.alt == 0):
+            self.late_init()
+
+    '''
+    Does not work well near the zero-median!
+    '''
+    def generate_sheep(self, max_gen_dist=1000, quantity=25, seed=None):  # default max_dist is about 1km
+        max_gen_dist *= 90  # Approximately convert from meters to degE7.
+
+        random.seed(seed)
+
+        for i in range(quantity):
+            self.simulated_sheep.append(self.Sheep(
+                sheep_id=i,
+                lat=self.lat + random.randrange(-max_gen_dist, max_gen_dist),
+                lon=self.lon + random.randrange(-max_gen_dist, max_gen_dist),
+                alt=self.alt
+            ))
+            # print(self.simulated_sheep[-1])
+
+    def ping_sheep(self):
+        max_ping_range = self.max_ping_range * 90  # Approximately convert from meters to degE7.
+
+        new_samples = []
+        for sheep in self.simulated_sheep:
+            dist = sqrt(fabs(sheep.lat - self.lat)**2 + fabs(sheep.lon - self.lon)**2 + fabs((sheep.alt - self.alt) * 0.09)**2)
+            # print(dist / 90.0, dist <= max_range)
+            if dist <= max_ping_range:
+                new_samples.append(self.Sample(sheep.sheep_id, self.lat, self.lon, self.alt, int(dist/450 + 2.5)))
+
+        if len(new_samples) == 0:
+            return False
+
+        self.samples.append(random.choice(new_samples))
+        self.ping_seq += 1
+        return True
+
+    def is_more_samples(self):
+        return self.ping_seq > self.send_seq
+
+    def send_next_sample(self):
+        sample = self.samples[self.send_seq]
+        return self.send_seq, sample.lat, sample.lon, sample.alt, sample.dist, sample.sheep_id
+
+    def receive_ack(self, seq):
+        if seq == self.send_seq:
+            self.send_seq += 1
 
 
 if __name__ == '__main__':
@@ -39,15 +131,28 @@ if __name__ == '__main__':
         mavutil.mavlink.MAV_DATA_STREAM_POSITION,
         gps_update_frequency, 1)
 
-    drone_gps = None
+    sheep_rtt_emulator = SheepRTTEmulator(max_ping_range=250, max_gen_dist=1000, quantity=25, seed=123)
 
-    last_heartbeat = 0
+    def send_sample_if_possible(encapsulation=False):
+        if sheep_rtt_emulator.is_more_samples():
+            seq, lat, lon, alt, dist, sheep_id = sheep_rtt_emulator.send_next_sample()
+
+            # Send the sheepRTT data packet directly.
+            the_connection.mav.sheep_rtt_data_send(seq, lat, lon, alt, dist, sheep_id)
+
+            # Pack sheepRTT data packet inside a data32 packet and send it. With zero padding.
+            sheep_rtt_data_packet = the_connection.mav.sheep_rtt_data_encode(seq, lat, lon, alt, dist, sheep_id).pack(
+                the_connection.mav) + b'\x00'
+            the_connection.mav.data32_send(129, 31, sheep_rtt_data_packet)
+
+    last_heartbeat_sent = 0
 
     while True:
-        if time() > last_heartbeat + 1:
-            last_heartbeat = time()
+        if time() > last_heartbeat_sent + 1:
+            last_heartbeat_sent = time()
             send_heartbeat(the_connection)
 
+            '''
             # Send the sheepRTT data packet directly.
             the_connection.mav.sheep_rtt_data_send(0, 1337, 1337, 420, 69, 12)
 
@@ -55,7 +160,6 @@ if __name__ == '__main__':
             sheep_rtt_data_packet = the_connection.mav.sheep_rtt_data_encode(0, 1337, 1337, 420, 69, 12).pack(the_connection.mav) + b'\x00'
             the_connection.mav.data32_send(129, 31, sheep_rtt_data_packet)
 
-            '''
             # Send the sheepRTT ack packet directly.
             the_connection.mav.sheep_rtt_ack_send(int(0))
 
@@ -64,22 +168,37 @@ if __name__ == '__main__':
             the_connection.mav.data16_send(130, 13, sheep_rtt_ack_packet)
             '''
 
+            send_sample_if_possible(encapsulation=True)
+
+            sheep_rtt_emulator.ping_sheep()
+
         msg = the_connection.recv_msg()
 
-        if msg is None or msg.get_type() is 'BAD_DATA':
+        # Ignore non recognised messages
+        if msg.get_type() is 'BAD_DATA':
+            continue
+
+        # Sleep when not receiving any messages to save CPU cycles.
+        if msg is None:
             sleep(0.02)
             continue
 
         if msg.name is 'GLOBAL_POSITION_INT':
             print(msg)
+            if msg.lat != 0 and msg.lon != 0 and msg.alt != 0:
+                sheep_rtt_emulator.update_position_from_msg(msg)
         elif msg.name is 'SHEEP_RTT_ACK':
             print(msg)
 
-            # TODO: Process sheepRTT ack.
+            # Process sheepRTT ack.
+            sheep_rtt_emulator.receive_ack(msg.seq)
+            send_sample_if_possible(encapsulation=True)
         elif msg.name is 'DATA16' and msg.type == 130 and msg.len == 13:
             msg = the_connection.mav.parse_char(msg.data[0:-1])  # Unpack encapsulated sheepRTT data.
             print(msg)
 
-            # TODO: Process sheepRTT ack.
+            # Process sheepRTT ack.
+            sheep_rtt_emulator.receive_ack(msg.seq)
+            send_sample_if_possible(encapsulation=True)
         else:
             print(msg)
