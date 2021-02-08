@@ -137,13 +137,14 @@ if __name__ == '__main__':
         if sheep_rtt_emulator.is_more_samples():
             seq, lat, lon, alt, dist, sheep_id = sheep_rtt_emulator.send_next_sample()
 
-            # Send the sheepRTT data packet directly.
-            the_connection.mav.sheep_rtt_data_send(seq, lat, lon, alt, dist, sheep_id)
-
-            # Pack sheepRTT data packet inside a data32 packet and send it. With zero padding.
-            sheep_rtt_data_packet = the_connection.mav.sheep_rtt_data_encode(seq, lat, lon, alt, dist, sheep_id).pack(
-                the_connection.mav) + b'\x00'
-            the_connection.mav.data32_send(129, 31, sheep_rtt_data_packet)
+            if not encapsulation:
+                # Send the sheepRTT data packet directly.
+                the_connection.mav.sheep_rtt_data_send(seq, lat, lon, alt, dist, sheep_id)
+            else:
+                # Pack sheepRTT data packet inside a data32 packet and send it. With zero padding.
+                sheep_rtt_data_packet = the_connection.mav.sheep_rtt_data_encode(seq, lat, lon, alt, dist, sheep_id).pack(
+                    the_connection.mav) + b'\x00'
+                the_connection.mav.data32_send(129, 31, sheep_rtt_data_packet)
 
     last_heartbeat_sent = 0
 
