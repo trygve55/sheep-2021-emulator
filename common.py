@@ -66,3 +66,7 @@ def wait_heartbeat(the_connection):
     #   This sets the system and component ID of remote system for the link
     the_connection.wait_heartbeat()
     print("Heartbeat from system (system %u component %u)" % (the_connection.target_system, the_connection.target_system))
+
+
+def is_autopilot_ardupilot(the_connection):
+    return the_connection.messages['HEARTBEAT'].autopilot is mavutil.mavlink.MAV_AUTOPILOT_ARDUPILOTMEGA

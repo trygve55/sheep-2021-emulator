@@ -1,9 +1,9 @@
 import sys
 from pymavlink import mavutil
 from time import time, sleep
-from common import print_usage, init_mavlink, wait_heartbeat
+from common import print_usage, init_mavlink, wait_heartbeat, is_autopilot_ardupilot
 import random
-from math import sqrt, fabs
+from math import sqrt, fabs, cos, radians
 
 
 def send_heartbeat(the_connection, active=True):
@@ -22,8 +22,9 @@ def send_heartbeat(the_connection, active=True):
 
 class SheepRTTEmulator:
     class Sample:
-        def __init__(self, sheep_id, lat, lon, alt, dist):
+        def __init__(self, sheep_id, seq, lat, lon, alt, dist):
             self.sheep_id = sheep_id
+            self.seq = seq
             self.lat = lat
             self.lon = lon
             self.alt = alt
@@ -50,9 +51,11 @@ class SheepRTTEmulator:
         self.ping_seq = 0
         self.send_seq = 0
         self.init_complete = False
+        self.long_lat = None
 
     def late_init(self):
-        self.generate_sheep(max_gen_dist=self.max_gen_dist, quantity=self.quantity, )
+        self.generate_sheep(max_gen_dist=self.max_gen_dist, quantity=self.quantity)
+        self.long_lat = 89.83 * cos(radians(self.lat / 10e6))
         self.init_complete = True
 
     def update_position_from_msg(self, msg):
@@ -70,7 +73,7 @@ class SheepRTTEmulator:
     def generate_sheep(self, max_gen_dist=1000, quantity=25, seed=None):  # default max_dist is about 1km
         max_gen_dist *= 90  # Approximately convert from meters to degE7.
 
-        random.seed(seed)
+        random.seed(self.seed)
 
         for i in range(quantity):
             self.simulated_sheep.append(self.Sheep(
@@ -82,14 +85,14 @@ class SheepRTTEmulator:
             # print(self.simulated_sheep[-1])
 
     def ping_sheep(self):
-        max_ping_range = self.max_ping_range * 90  # Approximately convert from meters to degE7.
+        #max_ping_range = self.max_ping_range * 90  # Approximately convert from meters to degE7.
 
         new_samples = []
         for sheep in self.simulated_sheep:
-            dist = sqrt(fabs(sheep.lat - self.lat)**2 + fabs(sheep.lon - self.lon)**2 + fabs((sheep.alt - self.alt) * 0.09)**2)
+            dist = sqrt(fabs((sheep.lat - self.lat)/89.83)**2 + fabs((sheep.lon - self.lon)/self.long_lat)**2) # + fabs((sheep.alt - self.alt) * 1000)**2)
             # print(dist / 90.0, dist <= max_range)
-            if dist <= max_ping_range:
-                new_samples.append(self.Sample(sheep.sheep_id, self.lat, self.lon, self.alt, int(dist/450 + 2.5)))
+            if dist <= self.max_ping_range:
+                new_samples.append(self.Sample(sheep.sheep_id, self.ping_seq, self.lat, self.lon, self.alt, int(dist/5 + 2.5)))
 
         if len(new_samples) == 0:
             return False
@@ -125,13 +128,21 @@ if __name__ == '__main__':
     # Request gps data drone drone
     gps_update_frequency = 1  # How often to request gps information in hertz.
 
-    the_connection.mav.request_data_stream_send(
-        the_connection.target_system,
-        the_connection.target_component,
-        mavutil.mavlink.MAV_DATA_STREAM_POSITION,
-        gps_update_frequency, 1)
+    if is_autopilot_ardupilot(the_connection):
+        the_connection.mav.request_data_stream_send(
+            the_connection.target_system,
+            the_connection.target_component,
+            mavutil.mavlink.MAV_DATA_STREAM_POSITION,
+            gps_update_frequency, 1)
+    else:
+        the_connection.mav.command_long_send(
+            the_connection.target_system,
+            the_connection.target_component,
+            mavutil.mavlink.
+            mavutil.mavlink.MAV_DATA_STREAM_POSITION,
+            gps_update_frequency, 1)
 
-    sheep_rtt_emulator = SheepRTTEmulator(max_ping_range=250, max_gen_dist=1000, quantity=25, seed=123)
+    sheep_rtt_emulator = SheepRTTEmulator(max_ping_range=250, max_gen_dist=1000, quantity=25, seed=None)
 
     def send_sample_if_possible(encapsulation=False):
         if sheep_rtt_emulator.is_more_samples():
@@ -175,17 +186,17 @@ if __name__ == '__main__':
 
         msg = the_connection.recv_msg()
 
-        # Ignore non recognised messages
-        if msg.get_type() is 'BAD_DATA':
-            continue
-
         # Sleep when not receiving any messages to save CPU cycles.
         if msg is None:
             sleep(0.02)
             continue
 
+        # Ignore non recognised messages
+        if msg.get_type() is 'BAD_DATA':
+            continue
+
         if msg.name is 'GLOBAL_POSITION_INT':
-            print(msg)
+            # print(msg)
             if msg.lat != 0 and msg.lon != 0 and msg.alt != 0:
                 sheep_rtt_emulator.update_position_from_msg(msg)
         elif msg.name is 'SHEEP_RTT_ACK':
@@ -202,4 +213,5 @@ if __name__ == '__main__':
             sheep_rtt_emulator.receive_ack(msg.seq)
             send_sample_if_possible(encapsulation=True)
         else:
-            print(msg)
+            pass
+            # print(msg)
