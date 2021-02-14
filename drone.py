@@ -74,17 +74,17 @@ if __name__ == '__main__':
 
     while True:
         new_move = time()
-        move_drone(time_delta=new_move - last_move)
+        move_drone(drone, time_delta=new_move - last_move)
         last_move = new_move
 
         if time() > last_heartbeat + 1:
             # print("heartbeat send")
             last_heartbeat = time()
-            send_heartbeat()
+            send_heartbeat(the_connection)
 
         if time() > last_send_position + 1:
             last_send_position = time()
-            send_data_stream_position()
+            send_data_stream_position(the_connection)
 
         msg = the_connection.recv_msg()
 
@@ -92,7 +92,7 @@ if __name__ == '__main__':
             sleep(0.02)
             continue
 
-        if msg.name is 'REQUEST_DATA_STREAM' and \
+        if msg.name == 'REQUEST_DATA_STREAM' and \
                 msg.req_stream_id == mavutil.mavlink.MAV_DATA_STREAM_POSITION and \
                 msg.target_system == drone_system and \
                 msg.target_component in (drone_component, 0):

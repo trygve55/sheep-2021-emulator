@@ -93,7 +93,7 @@ if __name__ == '__main__':
             sleep(0.02)
             continue
 
-        if msg.name is 'SHEEP_RTT_DATA':
+        if msg.name == 'SHEEP_RTT_DATA':
             print(msg)
 
             # TODO: Process sheepRTT data packet.
@@ -101,7 +101,7 @@ if __name__ == '__main__':
             # Send the sheepRTT ack packet directly.
             the_connection.mav.sheep_rtt_ack_send(msg.seq)
 
-        elif msg.name is 'DATA32' and msg.type == 129 and msg.len == 31:
+        elif msg.name == 'DATA32' and msg.type == 129 and msg.len == 31:
             msg = the_connection.mav.parse_char(msg.data[0:-1])  # Unpack encapsulated sheepRTT data.
             print(msg)
 

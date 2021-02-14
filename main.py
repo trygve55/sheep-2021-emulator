@@ -135,6 +135,7 @@ if __name__ == '__main__':
             mavutil.mavlink.MAV_DATA_STREAM_POSITION,
             gps_update_frequency, 1)
     else:
+        # TODO: Fix and test this.
         the_connection.mav.command_long_send(
             the_connection.target_system,
             the_connection.target_component,
@@ -151,11 +152,15 @@ if __name__ == '__main__':
             if not encapsulation:
                 # Send the sheepRTT data packet directly.
                 the_connection.mav.sheep_rtt_data_send(seq, lat, lon, alt, dist, sheep_id)
+
+                print('Sent sheep_rtt_data with seq:' + str(seq))
             else:
                 # Pack sheepRTT data packet inside a data32 packet and send it. With zero padding.
                 sheep_rtt_data_packet = the_connection.mav.sheep_rtt_data_encode(seq, lat, lon, alt, dist, sheep_id).pack(
                     the_connection.mav) + b'\x00'
                 the_connection.mav.data32_send(129, 31, sheep_rtt_data_packet)
+
+                print('Sent encapsulated sheep_rtt_data with seq:' + str(seq))
 
     last_heartbeat_sent = 0
 
@@ -192,20 +197,20 @@ if __name__ == '__main__':
             continue
 
         # Ignore non recognised messages
-        if msg.get_type() is 'BAD_DATA':
+        if msg.get_type() == 'BAD_DATA':
             continue
 
-        if msg.name is 'GLOBAL_POSITION_INT':
+        if msg.name == 'GLOBAL_POSITION_INT':
             # print(msg)
             if msg.lat != 0 and msg.lon != 0 and msg.alt != 0:
                 sheep_rtt_emulator.update_position_from_msg(msg)
-        elif msg.name is 'SHEEP_RTT_ACK':
+        elif msg.name == 'SHEEP_RTT_ACK':
             print(msg)
 
             # Process sheepRTT ack.
             sheep_rtt_emulator.receive_ack(msg.seq)
             send_sample_if_possible(encapsulation=True)
-        elif msg.name is 'DATA16' and msg.type == 130 and msg.len == 13:
+        elif msg.name == 'DATA16' and msg.type == 130 and msg.len == 13:
             msg = the_connection.mav.parse_char(msg.data[0:-1])  # Unpack encapsulated sheepRTT data.
             print(msg)
 
