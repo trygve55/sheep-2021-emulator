@@ -4,6 +4,7 @@ from time import time, sleep
 from common import print_usage, init_mavlink, wait_heartbeat, is_autopilot_ardupilot
 import random
 from math import sqrt, fabs, cos, radians
+from collections import OrderedDict
 
 
 def send_heartbeat(the_connection, active=True):
@@ -18,6 +19,49 @@ def send_heartbeat(the_connection, active=True):
         base_mode=base_mode,
         custom_mode=custom_mode,
         system_status=system_status)
+
+
+class Params:
+    class Param:
+        def __init__(self, param_id, value, param_type, index):
+            self.param_id = str.encode(param_id)
+            self.value = value
+            self.param_type = param_type
+            self.index = index
+
+    def __init__(self):
+        self.parameters = OrderedDict()
+        self.parameters_type = OrderedDict()
+        self.add_param('param1_int', 1, mavutil.mavlink.MAV_PARAM_TYPE_INT32)
+        self.add_param('param2_float', 1.1, mavutil.mavlink.MAV_PARAM_TYPE_REAL32)
+
+    def add_param(self, param_id, value, param_type):
+        self.parameters[param_id] = value
+        self.parameters_type[param_id] = param_type
+
+    def set_by_id(self, param_id, value, param_type):
+        if param_id not in self.parameters or self.parameters_type[param_id] != param_type:
+            return None
+
+        self.parameters[param_id] = value
+        return self.get_by_id(param_id)
+
+    def get_param_count(self):
+        return len(self.parameters)
+
+    def get_by_index(self, index):
+        if index >= len(self.parameters):
+            return None
+
+        param_id = list(self.parameters.keys())[index]
+
+        return self.Param(param_id, self.parameters[param_id], self.parameters_type[param_id], index)
+
+    def get_by_id(self, param_id):
+        if param_id not in self.parameters:
+            return None
+
+        return self.Param(param_id, self.parameters[param_id], self.parameters_type[param_id], list(self.parameters.keys()).index(param_id))
 
 
 class SheepRTTEmulator:
@@ -67,9 +111,7 @@ class SheepRTTEmulator:
         if not self.init_complete and not (self.lat == 0 and self.lon == 0 and self.alt == 0):
             self.late_init()
 
-    '''
-    Does not work well near the zero-median!
-    '''
+    # Does not work well near the zero-median!
     def generate_sheep(self, max_gen_dist=1000, quantity=25, seed=None):  # default max_dist is about 1km
         max_gen_dist *= 90  # Approximately convert from meters to degE7.
 
@@ -143,8 +185,12 @@ if __name__ == '__main__':
             mavutil.mavlink.MAV_DATA_STREAM_POSITION,
             gps_update_frequency, 1)
 
+    # Object used to keep track of parameters.
+    parameters = Params()
+    # Start simulator for SheepRTT pinging of sheep.
     sheep_rtt_emulator = SheepRTTEmulator(max_ping_range=250, max_gen_dist=1000, quantity=25, seed=None)
 
+    # Sends a sheepRTT message if not all have been received by GCS. Toggleable encapsulation.
     def send_sample_if_possible(encapsulation=False):
         if sheep_rtt_emulator.is_more_samples():
             seq, lat, lon, alt, dist, sheep_id = sheep_rtt_emulator.send_next_sample()
@@ -162,6 +208,7 @@ if __name__ == '__main__':
 
                 print('Sent encapsulated sheep_rtt_data with seq:' + str(seq))
 
+    # Used to keep the time when the last heartbeat was sent.
     last_heartbeat_sent = 0
 
     while True:
@@ -199,17 +246,19 @@ if __name__ == '__main__':
         # Ignore non recognised messages
         if msg.get_type() == 'BAD_DATA':
             continue
-
-        if msg.name == 'GLOBAL_POSITION_INT':
+        # GPS position message, used to update internally stored position
+        elif msg.name == 'GLOBAL_POSITION_INT':
             # print(msg)
             if msg.lat != 0 and msg.lon != 0 and msg.alt != 0:
                 sheep_rtt_emulator.update_position_from_msg(msg)
+        # SheepRTT acknowledgment message
         elif msg.name == 'SHEEP_RTT_ACK':
             print(msg)
 
             # Process sheepRTT ack.
             sheep_rtt_emulator.receive_ack(msg.seq)
             send_sample_if_possible(encapsulation=True)
+        # Encapsulated SheepRTT acknowledgment message
         elif msg.name == 'DATA16' and msg.type == 130 and msg.len == 13:
             msg = the_connection.mav.parse_char(msg.data[0:-1])  # Unpack encapsulated sheepRTT data.
             print(msg)
@@ -217,6 +266,42 @@ if __name__ == '__main__':
             # Process sheepRTT ack.
             sheep_rtt_emulator.receive_ack(msg.seq)
             send_sample_if_possible(encapsulation=True)
+        # Request to read a single parameter
+        elif msg.name == 'PARAM_REQUEST_READ' and msg.target_system == nrf52833_system and msg.target_component == nrf52833_component:
+            print(msg)
+
+            param = None
+            if msg.param_index == -1:
+                param = parameters.get_by_id(msg.param_id)
+            else:
+                param = parameters.get_by_index(msg.param_index)
+
+            if param is None:
+                print("Error not found processing:", msg)
+                continue
+
+            the_connection.mav.param_value_send(param.param_id, param.value, param.param_type, parameters.get_param_count(), param.index)
+        # Request to read all parameters
+        elif msg.name == 'PARAM_REQUEST_LIST' and msg.target_system == nrf52833_system and msg.target_component == nrf52833_component:
+            print(msg)
+
+            for i in range(parameters.get_param_count()):
+                param = parameters.get_by_index(i)
+                the_connection.mav.param_value_send(param.param_id, param.value, param.param_type, parameters.get_param_count(), param.index)
+                # Should have a small pause here if many parameters
+        # Request to set a single parameter
+        elif msg.name == 'PARAM_SET' and msg.target_system == nrf52833_system and msg.target_component == nrf52833_component:
+            print(msg)
+
+            param = parameters.set_by_id(msg.param_id, msg.param_value, msg.param_type)
+
+            if param is None:
+                print("Error not found processing:", msg)
+                continue
+
+            # Reply with a PARAM_VALUE message containing new values to confirm set.
+            the_connection.mav.param_value_send(param.param_id, param.value, param.param_type, parameters.get_param_count(), param.index)
+        # Other messages
         else:
             pass
             # print(msg)

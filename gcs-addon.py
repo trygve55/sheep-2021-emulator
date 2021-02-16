@@ -82,25 +82,39 @@ if __name__ == '__main__':
     gcs_addon_component = 98  # MAVLINK component id for the module. Id 98 is a non reserved id.
     the_connection = init_mavlink(gcs_addon_system, gcs_addon_component, connection_string, baud)
 
+    # Wait for heartbeat from drone before continuing
     wait_heartbeat(the_connection)
 
+    # Start system for visualizing samples
     sample_plotter = SamplePlotter()
+
+    # Start parameter related testing
+    the_connection.mav.param_request_read_send(1, 99, str.encode('param1_int'), -1)  # Test get parameter by id
+    the_connection.mav.param_request_read_send(1, 99, str.encode(''), 1)  # Test get parameter by index
+    the_connection.mav.param_request_list_send(1, 99)  # Test get all parameter
+    the_connection.mav.param_set_send(1, 99, str.encode('param1_int'), 2, mavutil.mavlink.MAV_PARAM_TYPE_INT32)  # Test set a single parameter
+    # End parameter related testing
 
     while True:
         msg = the_connection.recv_match(blocking=False)
 
+        # Sleep when not receiving any messages to save CPU cycles.
         if msg is None:
             sleep(0.02)
             continue
 
-        if msg.name == 'SHEEP_RTT_DATA':
+        # Ignore non recognised messages
+        if msg.get_type() == 'BAD_DATA':
+            continue
+        # SheepRTT data message containing a sample
+        elif msg.name == 'SHEEP_RTT_DATA':
             print(msg)
 
             # TODO: Process sheepRTT data packet.
 
             # Send the sheepRTT ack packet directly.
             the_connection.mav.sheep_rtt_ack_send(msg.seq)
-
+        # Encapsulated SheepRTT data message containing a sample
         elif msg.name == 'DATA32' and msg.type == 129 and msg.len == 31:
             msg = the_connection.mav.parse_char(msg.data[0:-1])  # Unpack encapsulated sheepRTT data.
             print(msg)
@@ -115,6 +129,10 @@ if __name__ == '__main__':
             the_connection.mav.data16_send(130, 13, sheep_rtt_ack_packet)
 
             sample_plotter.add_sample(Sample(msg.tid, msg.seq, msg.lat, msg.lon, msg.alt, msg.dis))
+        # Parameter related messages
+        elif msg.name in ['PARAM_REQUEST_READ', 'PARAM_REQUEST_LIST', 'PARAM_VALUE', 'PARAM_SET']:
+            print(msg)
+        # Other messages
         else:
             pass
             # print(msg)
