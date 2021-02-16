@@ -107,7 +107,7 @@ class SheepRTTEmulator:
         self.lon = msg.lon
         self.alt = msg.alt
 
-        # Check if late_init is not complete and valid gps signal is received.
+        # Check if late_init is not complete and start it if a valid gps signal is received.
         if not self.init_complete and not (self.lat == 0 and self.lon == 0 and self.alt == 0):
             self.late_init()
 
@@ -122,17 +122,12 @@ class SheepRTTEmulator:
                 sheep_id=i,
                 lat=self.lat + random.randrange(-max_gen_dist, max_gen_dist),
                 lon=self.lon + random.randrange(-max_gen_dist, max_gen_dist),
-                alt=self.alt
-            ))
-            # print(self.simulated_sheep[-1])
+                alt=self.alt))
 
     def ping_sheep(self):
-        #max_ping_range = self.max_ping_range * 90  # Approximately convert from meters to degE7.
-
         new_samples = []
         for sheep in self.simulated_sheep:
             dist = sqrt(fabs((sheep.lat - self.lat)/89.83)**2 + fabs((sheep.lon - self.lon)/self.long_lat)**2) # + fabs((sheep.alt - self.alt) * 1000)**2)
-            # print(dist / 90.0, dist <= max_range)
             if dist <= self.max_ping_range:
                 new_samples.append(self.Sample(sheep.sheep_id, self.ping_seq, self.lat, self.lon, self.alt, int(dist/5 + 2.5)))
 
@@ -216,24 +211,7 @@ if __name__ == '__main__':
             last_heartbeat_sent = time()
             send_heartbeat(the_connection)
 
-            '''
-            # Send the sheepRTT data packet directly.
-            the_connection.mav.sheep_rtt_data_send(0, 1337, 1337, 420, 69, 12)
-
-            # Pack sheepRTT data packet inside a data32 packet and send it. With zero padding.
-            sheep_rtt_data_packet = the_connection.mav.sheep_rtt_data_encode(0, 1337, 1337, 420, 69, 12).pack(the_connection.mav) + b'\x00'
-            the_connection.mav.data32_send(129, 31, sheep_rtt_data_packet)
-
-            # Send the sheepRTT ack packet directly.
-            the_connection.mav.sheep_rtt_ack_send(int(0))
-
-            # Pack sheepRTT ack packet inside a data16 packet and send it. With zero padding.
-            sheep_rtt_ack_packet = the_connection.mav.sheep_rtt_ack_encode(0).pack(the_connection.mav) + b'\x00\x00\x00'
-            the_connection.mav.data16_send(130, 13, sheep_rtt_ack_packet)
-            '''
-
             send_sample_if_possible(encapsulation=True)
-
             sheep_rtt_emulator.ping_sheep()
 
         msg = the_connection.recv_msg()
