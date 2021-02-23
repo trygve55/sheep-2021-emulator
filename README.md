@@ -46,3 +46,44 @@ Connecting to ArduPilot SITL via TCP to emulate the sheepRTT nRF52833.
 ```bash
 python main.py tcp:localhost:5763
 ```
+
+## Wireshark MAVLink dissector setup
+
+### Setup
+Skip this step if you have already completed the installation instructions above.
+```bash
+git clone --recurse-submodules https://github.com/trygve55/sheep-2021-emulator
+cd sheep-2021-emulator
+python3 -m venv .
+source bin/activate
+pip install lxml future pyserial
+```
+
+### Generate Lua dissector
+```bash
+cd mavlink
+python -m pymavlink.tools.mavgen --lang=WLua --wire-protocol=2.0 --output=pymavlink/dialects/v20/mavlink_sheeprtt_ardupilotmega.lua message_definitions/v1.0/sheeprtt_ardupilotmega.xml
+```
+Copy the generated mavlink_*.lua file to Wireshark's Personal(or Global) Lua Plugins folder. The plugins folder can be found by opening Wireshark, clicking "Help", "About Wireshark" and going to the Folders tab.
+
+### Set the correct port and UDP/TCP
+You may need to make a few changes to your Lua dissector to make it work with other than UDP port 14550 and 14580.
+
+
+Last few lines of Lua dissector:
+```lua
+local udp_dissector_table = DissectorTable.get("udp.port")
+udp_dissector_table:add(14550, mavlink_proto)
+udp_dissector_table:add(14580, mavlink_proto)
+```
+Example with TCP port 14530 added:
+```lua
+local udp_dissector_table = DissectorTable.get("udp.port")
+udp_dissector_table:add(14550, mavlink_proto)
+udp_dissector_table:add(14580, mavlink_proto)
+local tcp_dissector_table = DissectorTable.get("tcp.port")
+tcp_dissector_table:add(14530, mavlink_proto)
+```
+
+### Note
+You may be denied from loading the Lua dissector if you run Wireshark as root. To solve this follow these steps. https://superuser.com/questions/319865/how-to-set-up-wireshark-to-run-without-root-on-debian
