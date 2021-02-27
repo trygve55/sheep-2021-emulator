@@ -237,7 +237,7 @@ if __name__ == '__main__':
             sheep_rtt_emulator.receive_ack(msg.seq)
             send_sample_if_possible(encapsulation=True)
         # Encapsulated SheepRTT acknowledgment message
-        elif msg.name == 'DATA16' and msg.type == 130 and msg.len == 13:
+        elif msg.name == 'DATA16' and msg.type == 130:
             msg = the_connection.mav.parse_char(msg.data[0:-1])  # Unpack encapsulated sheepRTT data.
             print(msg)
 

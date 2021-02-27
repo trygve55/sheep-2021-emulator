@@ -126,7 +126,7 @@ if __name__ == '__main__':
 
             # Pack sheepRTT ack packet inside a data16 packet and send it. With zero padding.
             sheep_rtt_ack_packet = the_connection.mav.sheep_rtt_ack_encode(msg.seq).pack(the_connection.mav) + b'\x00\x00\x00'
-            the_connection.mav.data16_send(130, 13, sheep_rtt_ack_packet)
+            the_connection.mav.data16_send(130, len(sheep_rtt_ack_packet) - 3, sheep_rtt_ack_packet)
 
             sample_plotter.add_sample(Sample(msg.tid, msg.seq, msg.lat, msg.lon, msg.alt, msg.dis))
         # Parameter related messages
