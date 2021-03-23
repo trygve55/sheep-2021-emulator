@@ -3,7 +3,7 @@ from pymavlink import mavutil
 from time import time, sleep
 from common import print_usage, init_mavlink, wait_heartbeat, is_autopilot_ardupilot
 import random
-from math import sqrt, fabs, cos, radians
+from math import sqrt, fabs, cos, radians, sin, asin
 from collections import OrderedDict
 
 
@@ -81,11 +81,12 @@ class SheepRTTEmulator:
             self.lon = lon
             self.alt = alt
 
-    def __init__(self, max_ping_range=250, max_gen_dist=1000, quantity=25, seed=None):
+    def __init__(self, max_ping_range=250, max_gen_dist=1000, quantity=25, seed=None, measurement_uncertainty=2.5):
         self.max_ping_range = max_ping_range
         self.max_gen_dist = max_gen_dist
         self.quantity = quantity
         self.seed = seed
+        self.measurement_uncertainty = measurement_uncertainty
 
         self.lat = 0
         self.lon = 0
@@ -124,12 +125,22 @@ class SheepRTTEmulator:
                 lon=self.lon + random.randrange(-max_gen_dist, max_gen_dist),
                 alt=self.alt))
 
+        print('\n{{"type": "FeatureCollection", "features": [{}]}}'.format(', '.join(['{{"type": "Feature", "id": {}, "properties": {{}}, "geometry": {{"type": "Point", "coordinates": [{}, {}]}}}}\n'.format(sheep.sheep_id, sheep.lon/10**7, sheep.lat/10**7) for sheep in self.simulated_sheep])))
+    
     def ping_sheep(self):
         new_samples = []
         for sheep in self.simulated_sheep:
-            dist = sqrt(fabs((sheep.lat - self.lat)/89.83)**2 + fabs((sheep.lon - self.lon)/self.long_lat)**2) # + fabs((sheep.alt - self.alt) * 1000)**2)
+            # dist = sqrt(fabs((sheep.lat - self.lat)/89.83)**2 + fabs((sheep.lon - self.lon)/self.long_lat)**2) # + fabs((sheep.alt - self.alt) * 1000)**2)
+            lon1, lat1, lon2, lat2 = map(radians, [sheep.lon/10**7, sheep.lat/10**7, self.lon/10**7, self.lat/10**7])
+            dlon = lon2 - lon1 
+            dlat = lat2 - lat1 
+            a = sin(dlat/2)**2 + cos(lat1) * cos(lat2) * sin(dlon/2)**2
+            c = 2 * asin(sqrt(a)) 
+            r = 6371800 # Earth radius
+            dist = c * r
+            
             if dist <= self.max_ping_range:
-                new_samples.append(self.Sample(sheep.sheep_id, self.ping_seq, self.lat, self.lon, self.alt, int(dist/5 + 2.5)))
+                new_samples.append(self.Sample(sheep.sheep_id, self.ping_seq, self.lat, self.lon, self.alt, int(max(1, dist + random.randrange(-self.measurement_uncertainty/2, self.measurement_uncertainty))/5)))
 
         if len(new_samples) == 0:
             return False
@@ -183,7 +194,7 @@ if __name__ == '__main__':
     # Object used to keep track of parameters.
     parameters = Params()
     # Start simulator for SheepRTT pinging of sheep.
-    sheep_rtt_emulator = SheepRTTEmulator(max_ping_range=250, max_gen_dist=1000, quantity=25, seed=None)
+    sheep_rtt_emulator = SheepRTTEmulator(max_ping_range=250, max_gen_dist=1000, quantity=25, seed=None, measurement_uncertainty=50)
 
     # Sends a sheepRTT message if not all have been received by GCS. Toggleable encapsulation.
     def send_sample_if_possible(encapsulation=False):
@@ -197,20 +208,27 @@ if __name__ == '__main__':
                 print('Sent sheep_rtt_data with seq:' + str(seq))
             else:
                 # Pack sheepRTT data packet inside a data32 packet and send it. With zero padding.
-                sheep_rtt_data_packet = the_connection.mav.sheep_rtt_data_encode(seq, lat, lon, alt, dist, sheep_id).pack(
-                    the_connection.mav) + b'\x00'
-                the_connection.mav.data32_send(129, 31, sheep_rtt_data_packet)
+                try: 
+                    sheep_rtt_data_packet = the_connection.mav.sheep_rtt_data_encode(seq, lat, lon, alt, dist, sheep_id).pack(the_connection.mav) + b'\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00'
+                    the_connection.mav.data32_send(129, 31, sheep_rtt_data_packet)
+                    print('Sent encapsulated sheep_rtt_data with seq:' + str(seq))
+                except Exception as e:
+                    print(e)
+                    print(sheep_rtt_data_packet)
+                    print(len(sheep_rtt_data_packet))
 
-                print('Sent encapsulated sheep_rtt_data with seq:' + str(seq))
 
     # Used to keep the time when the last heartbeat was sent.
     last_heartbeat_sent = 0
+    last_ping_sent = 0
 
     while True:
         if time() > last_heartbeat_sent + 1:
             last_heartbeat_sent = time()
             send_heartbeat(the_connection)
 
+        if time() > last_ping_sent + 10:
+            last_ping_sent = time()
             send_sample_if_possible(encapsulation=True)
             sheep_rtt_emulator.ping_sheep()
 
