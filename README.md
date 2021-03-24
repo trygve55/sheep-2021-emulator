@@ -10,7 +10,6 @@ source bin/activate
 pip install lxml future pyserial
 cd mavlink
 python -m pymavlink.tools.mavgen --lang=Python --wire-protocol=2.0 --output=pymavlink/dialects/v20/sheeprtt_ardupilotmega.py message_definitions/v1.0/sheeprtt_ardupilotmega.xml
-python -m pymavlink.tools.mavgen --lang=Python --wire-protocol=1.0 --output=pymavlink/dialects/v10/sheeprtt_ardupilotmega.py message_definitions/v1.0/sheeprtt_ardupilotmega.xml
 cd pymavlink
 python setup.py install
 ```
