@@ -25,6 +25,9 @@ The part of the GCS software dealing with sheepRTT related packets.
 ### Drone
 Emulates a drone moving slowly. Responds to REQUEST_DATA_STREAM messages and sends out a heartbeat. You should use the ArduPilot SITL instead.
 
+### Module_tests
+Runs a series of test to confirm that the functionality is implemented correctly on the module. Can also be run against main.py.
+
 ## Running
 Connecting to drone via usb serial to emulate the sheepRTT nRF52833.
 ```bash
@@ -45,6 +48,11 @@ python main.py tcp:localhost:14530
 Connecting to ArduPilot SITL via TCP to emulate the sheepRTT nRF52833.
 ```bash
 python main.py tcp:localhost:5763
+```
+
+Connecting to module via usb serial to emulate the sheepRTT nRF52833.
+```bash
+python module_tests.py /dev/ttyUSB0 57600
 ```
 
 ## Wireshark MAVLink dissector setup
