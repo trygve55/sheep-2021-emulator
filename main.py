@@ -176,25 +176,26 @@ if __name__ == '__main__':
     # Request gps data drone drone
     gps_update_frequency = 1  # How often to request gps information in hertz.
 
-    if is_autopilot_ardupilot(the_connection):
-        the_connection.mav.request_data_stream_send(
-            the_connection.target_system,
-            the_connection.target_component,
-            mavutil.mavlink.MAV_DATA_STREAM_POSITION,
-            gps_update_frequency, 1)
-    else:
-        # TODO: Fix and test this.
-        the_connection.mav.command_long_send(
-            the_connection.target_system,
-            the_connection.target_component,
-            mavutil.mavlink.
-            mavutil.mavlink.MAV_DATA_STREAM_POSITION,
-            gps_update_frequency, 1)
-
     # Object used to keep track of parameters.
     parameters = Params()
     # Start simulator for SheepRTT pinging of sheep.
     sheep_rtt_emulator = SheepRTTEmulator(max_ping_range=250, max_gen_dist=1000, quantity=25, seed=None, measurement_uncertainty=50)
+
+    def request_gps():
+        if True or is_autopilot_ardupilot(the_connection):
+            the_connection.mav.request_data_stream_send(
+                the_connection.target_system,
+                the_connection.target_component,
+                mavutil.mavlink.MAV_DATA_STREAM_POSITION,
+                gps_update_frequency, 1)
+        else:
+            # TODO: Fix and test this.
+            the_connection.mav.command_long_send(
+                the_connection.target_system,
+                the_connection.target_component,
+                mavutil.mavlink.
+                mavutil.mavlink.MAV_DATA_STREAM_POSITION,
+                gps_update_frequency, 1)
 
     # Sends a sheepRTT message if not all have been received by GCS. Toggleable encapsulation.
     def send_sample_if_possible(encapsulation=False):
@@ -221,11 +222,17 @@ if __name__ == '__main__':
     # Used to keep the time when the last heartbeat was sent.
     last_heartbeat_sent = 0
     last_ping_sent = 0
+    last_gps_request_sent = 0
 
     while True:
         if time() > last_heartbeat_sent + 1:
             last_heartbeat_sent = time()
             send_heartbeat(the_connection)
+
+        if time() > last_gps_request_sent + 1:
+            last_gps_request_sent = time()
+            if not sheep_rtt_emulator.init_complete:
+                request_gps()
 
         if time() > last_ping_sent + 10:
             last_ping_sent = time()

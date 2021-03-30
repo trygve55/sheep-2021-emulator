@@ -78,11 +78,10 @@ if __name__ == '__main__':
         last_move = new_move
 
         if time() > last_heartbeat + 1:
-            # print("heartbeat send")
             last_heartbeat = time()
             send_heartbeat(the_connection)
 
-        if time() > last_send_position + 1:
+        if time() > last_send_position + 1.5:
             last_send_position = time()
             send_data_stream_position(the_connection)
 

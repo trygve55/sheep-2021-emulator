@@ -40,7 +40,7 @@ def init_mavlink(mavlink_system_id,  # MAVLINK system id for the module. Id 1 is
                                                     source_system=mavlink_system_id,
                                                     source_component=mavlink_component_id)
 
-    print('Interface opened.')
+    print('Interface opened: {}'.format(connection_string))
     return the_connection
 
 
