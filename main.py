@@ -154,7 +154,7 @@ class SheepRTTEmulator:
 
     def send_next_sample(self):
         sample = self.samples[self.send_seq]
-        return self.send_seq, sample.lat, sample.lon, sample.alt, sample.dist, sample.sheep_id
+        return self.send_seq, sample.lat, sample.lon, sample.alt, sample.dist, sample.sheep_id, -69
 
     def receive_ack(self, seq):
         if seq == self.send_seq:
@@ -200,7 +200,7 @@ if __name__ == '__main__':
     # Sends a sheepRTT message if not all have been received by GCS. Toggleable encapsulation.
     def send_sample_if_possible(encapsulation=False):
         if sheep_rtt_emulator.is_more_samples():
-            seq, lat, lon, alt, dist, sheep_id = sheep_rtt_emulator.send_next_sample()
+            seq, lat, lon, alt, dist, sheep_id, rssi = sheep_rtt_emulator.send_next_sample()
 
             if not encapsulation:
                 # Send the sheepRTT data packet directly.
@@ -208,10 +208,11 @@ if __name__ == '__main__':
 
                 print('Sent sheep_rtt_data with seq:' + str(seq))
             else:
-                # Pack sheepRTT data packet inside a data32 packet and send it. With zero padding.
+                # Pack sheepRTT data packet inside a data64 packet and send it. With zero padding.
                 try: 
-                    sheep_rtt_data_packet = the_connection.mav.sheep_rtt_data_encode(seq, lat, lon, alt, dist, sheep_id).pack(the_connection.mav) + b'\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00'
-                    the_connection.mav.data32_send(129, 31, sheep_rtt_data_packet)
+                    sheep_rtt_data_packet = the_connection.mav.sheep_rtt_data_encode(seq, lat, lon, alt, dist, sheep_id, rssi).pack(the_connection.mav) + \
+                                            b'\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00'
+                    the_connection.mav.data64_send(129, len(sheep_rtt_data_packet) - 32, sheep_rtt_data_packet)
                     print('Sent encapsulated sheep_rtt_data with seq:' + str(seq))
                 except Exception as e:
                     print(e)
@@ -234,7 +235,7 @@ if __name__ == '__main__':
             if not sheep_rtt_emulator.init_complete:
                 request_gps()
 
-        if time() > last_ping_sent + 10:
+        if time() > last_ping_sent + 1:
             last_ping_sent = time()
             send_sample_if_possible(encapsulation=True)
             sheep_rtt_emulator.ping_sheep()

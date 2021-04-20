@@ -115,7 +115,7 @@ if __name__ == '__main__':
             # Send the sheepRTT ack packet directly.
             the_connection.mav.sheep_rtt_ack_send(msg.seq)
         # Encapsulated SheepRTT data message containing a sample
-        elif msg.name == 'DATA32' and msg.type == 129 and msg.len == 31:
+        elif msg.name == 'DATA64' and msg.type == 129:
             msg = the_connection.mav.parse_char(msg.data[0:-1])  # Unpack encapsulated sheepRTT data.
             print(msg)
 

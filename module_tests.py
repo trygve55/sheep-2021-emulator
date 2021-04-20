@@ -81,18 +81,7 @@ if __name__ == '__main__':
     }
 
     last_sheep_rtt_seq = -1
-    test_timeout = 3  # 5 sec timeout
-
-    # Testing if module is silent before receiving heartbeat
-    print('\n\n1. ##############################################################################')
-    print('Checking if module is silent before receiving heartbeat...')
-    msg = the_connection_drone.recv_match(blocking=True, timeout=test_timeout)
-    if msg is not None:
-        print('NOT OK! Message received from module before it got a heartbeat! Maybe restart it?')
-        the_connection_drone.close()
-        the_connection_gcs.close()
-        exit()
-    print('OK! Module is silent before receiving heartbeat.')
+    test_timeout = 5  # 5 sec timeout
 
     # Testing sending heartbeat
     print('\n\n2. ##############################################################################')
@@ -152,11 +141,14 @@ if __name__ == '__main__':
 
     # Checking if module sends 'SHEEP_RTT_DATA'.
     print('\n\n4. ##############################################################################')
-    print("Checking if module sends 'SHEEP_RTT_DATA'.")
+    print("Checking if module sends 'SHEEP_RTT_DATA' or encapsulated 'SHEEP_RTT_DATA'.")
 
-    msg = the_connection_drone.recv_match(type=['SHEEP_RTT_DATA'], blocking=True, timeout=test_timeout*5)
+    msg = the_connection_drone.recv_match(type=['SHEEP_RTT_DATA', 'DATA64'], blocking=True, timeout=test_timeout*5)
     if msg is None:
-        print('NOT OK! No SHEEP_RTT_DATA received.')
+        print('NOT OK! No SHEEP_RTT_DATA or encapsulated SHEEP_RTT_DATA received.')
+        the_connection_drone.close()
+        the_connection_drone.close()
+        exit()
     elif msg.name == 'SHEEP_RTT_DATA':
         last_sheep_rtt_seq = msg.seq
         print('OK! SHEEP_RTT_DATA received.')
@@ -165,23 +157,15 @@ if __name__ == '__main__':
         msg_ack = the_connection_gcs.mav.sheep_rtt_ack_encode(msg.seq)
         the_connection_drone.mav.send(msg_ack)
         print('Sending SHEEP_RTT_ACK to module.')
-
-    # Checking if module sends encapsulated 'SHEEP_RTT_DATA'.
-    print('\n\n5. ##############################################################################')
-    print("Checking if module sends encapsulated 'SHEEP_RTT_DATA'.")
-
-    msg = the_connection_drone.recv_match(type=['DATA32'], blocking=True, timeout=test_timeout*5)
-    if msg is None:
-        print('NOT OK! No encapsulated SHEEP_RTT_DATA received.')
-    elif msg.name == 'DATA32' and msg.type == 129:
-        msg = the_connection_gcs.mav.parse_char(msg.data[0:-1])  # Unpack encapsulated sheepRTT data.
+    elif msg.name == 'DATA64' and msg.type == 129:
+        msg = the_connection_gcs.mav.parse_char(msg.data[0:msg.len])  # Unpack encapsulated sheepRTT data.
         last_sheep_rtt_seq = msg.seq
+        print(msg)
 
         print('OK! Encapsulated SHEEP_RTT_DATA received.')
 
         # Pack sheepRTT ack packet inside a data16 packet and send it. With zero padding.
-        sheep_rtt_ack_packet = the_connection_gcs.mav.sheep_rtt_ack_encode(msg.seq).pack(
-            the_connection_gcs.mav) + b'\x00\x00\x00'
+        sheep_rtt_ack_packet = the_connection_gcs.mav.sheep_rtt_ack_encode(msg.seq).pack(the_connection_gcs.mav) + b'\x00\x00\x00'
 
         msg_ack = the_connection_gcs.mav.data16_encode(130, len(sheep_rtt_ack_packet) - 3, sheep_rtt_ack_packet)
         the_connection_drone.mav.send(msg_ack)
@@ -191,7 +175,7 @@ if __name__ == '__main__':
     print('\n\n6. ##############################################################################')
     print("Checking if module increments 'SHEEP_RTT_DATA' seq after ack.")
 
-    msg = the_connection_drone.recv_match(type=['SHEEP_RTT_DATA', 'DATA32'], blocking=True, timeout=test_timeout*5)
+    msg = the_connection_drone.recv_match(type=['SHEEP_RTT_DATA', 'DATA64'], blocking=True, timeout=test_timeout*5)
     if msg is None:
         print('NOT OK! No encapsulated SHEEP_RTT_DATA received.')
         the_connection_drone.close()
@@ -199,8 +183,8 @@ if __name__ == '__main__':
         exit()
     elif msg.name == 'SHEEP_RTT_DATA':
         print('SHEEP_RTT_DATA received.')
-    elif msg.name == 'DATA32' and msg.type == 129:
-        msg = the_connection_gcs.mav.parse_char(msg.data[0:-1])  # Unpack encapsulated sheepRTT data.
+    elif msg.name == 'DATA64' and msg.type == 129:
+        msg = the_connection_gcs.mav.parse_char(msg.data[0:msg.len])  # Unpack encapsulated sheepRTT data.
         print('Encapsulated SHEEP_RTT_DATA received.')
 
     if msg.seq == last_sheep_rtt_seq + 1:
@@ -212,7 +196,7 @@ if __name__ == '__main__':
         exit()
 
     # Getting module parameter by id.
-    print('\n\n7. ##############################################################################')
+    print('\n\n6. ##############################################################################')
     print("Getting module parameter by id")
     # Start parameter related testing
     the_connection_drone.mav.param_request_read_send(1, 99, str.encode('param1_int'), -1)  # Test get parameter by id
@@ -237,7 +221,7 @@ if __name__ == '__main__':
     print('OK! Correct PARAM_VALUE received.')
 
     # Getting module parameter by index.
-    print('\n\n8. ##############################################################################')
+    print('\n\n7. ##############################################################################')
     print("Getting module parameter by index")
 
     the_connection_drone.mav.param_request_read_send(1, 99, str.encode(''), 1)  # Test get parameter by index
@@ -262,7 +246,7 @@ if __name__ == '__main__':
     print('OK! Correct PARAM_VALUE received.')
 
     # Getting all module parameters.
-    print('\n\n9. ##############################################################################')
+    print('\n\n8. ##############################################################################')
     print("Getting all module parameters.")
     the_connection_drone.mav.param_request_list_send(1, 99)  # Test get all parameter
     msg = the_connection_drone.recv_match(type='PARAM_VALUE', blocking=True, timeout=test_timeout)
@@ -289,7 +273,7 @@ if __name__ == '__main__':
     print('OK! All PARAM_VALUEs received.')
 
     # Setting module parameter.
-    print('\n\n10.##############################################################################')
+    print('\n\n9 .##############################################################################')
     print("Setting module parameter")
     the_connection_drone.mav.param_set_send(1, 99, str.encode('param1_int'), 2, mavutil.mavlink.MAV_PARAM_TYPE_INT32)  # Test set a single parameter
     msg = the_connection_drone.recv_match(type='PARAM_VALUE', blocking=True, timeout=test_timeout)
