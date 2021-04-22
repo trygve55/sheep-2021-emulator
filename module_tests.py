@@ -172,7 +172,7 @@ if __name__ == '__main__':
         print('Sending encapsulated SHEEP_RTT_ACK to module.')
 
     # Checking if module sends encapsulated 'SHEEP_RTT_DATA'.
-    print('\n\n6. ##############################################################################')
+    print('\n\n5. ##############################################################################')
     print("Checking if module increments 'SHEEP_RTT_DATA' seq after ack.")
 
     msg = the_connection_drone.recv_match(type=['SHEEP_RTT_DATA', 'DATA64'], blocking=True, timeout=test_timeout*5)
