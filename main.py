@@ -229,15 +229,16 @@ if __name__ == '__main__':
         if time() > last_heartbeat_sent + 1:
             last_heartbeat_sent = time()
             send_heartbeat(the_connection)
+            print(len(sheep_rtt_emulator.samples))
+            send_sample_if_possible(encapsulation=True)
 
         if time() > last_gps_request_sent + 1:
             last_gps_request_sent = time()
             if not sheep_rtt_emulator.init_complete:
                 request_gps()
 
-        if time() > last_ping_sent + 1:
+        if time() > last_ping_sent + 5:
             last_ping_sent = time()
-            send_sample_if_possible(encapsulation=True)
             sheep_rtt_emulator.ping_sheep()
 
         msg = the_connection.recv_msg()
