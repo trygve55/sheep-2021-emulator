@@ -140,7 +140,7 @@ class SheepRTTEmulator:
             dist = c * r
             
             if dist <= self.max_ping_range:
-                new_samples.append(self.Sample(sheep.sheep_id, self.ping_seq, self.lat, self.lon, self.alt, int(max(1, dist + random.randrange(-self.measurement_uncertainty/2, self.measurement_uncertainty))/5)))
+                new_samples.append(self.Sample(sheep.sheep_id, self.ping_seq, self.lat, self.lon, self.alt, int(max(1, dist + random.randrange(-self.measurement_uncertainty/2, self.measurement_uncertainty)))))
 
         if len(new_samples) == 0:
             return False
