@@ -68,5 +68,13 @@ def wait_heartbeat(the_connection):
     print("Heartbeat from system (system %u component %u)" % (the_connection.target_system, the_connection.target_system))
 
 
+def print_all_messages(the_connection):
+    while True:
+        msg = the_connection.recv_msg()
+        if msg is None or msg.get_type() == 'BAD_DATA':
+            continue
+        print(msg)
+
+
 def is_autopilot_ardupilot(the_connection):
     return the_connection.messages['HEARTBEAT'].autopilot is mavutil.mavlink.MAV_AUTOPILOT_ARDUPILOTMEGA

@@ -2,7 +2,7 @@ import sys
 import math
 from pymavlink import mavutil
 from time import time, sleep
-from common import print_usage, init_mavlink
+from common import print_usage, init_mavlink, print_all_messages
 import threading
 
 
@@ -84,7 +84,7 @@ if __name__ == '__main__':
     test_timeout = 5  # 5 sec timeout
 
     # Testing sending heartbeat
-    print('\n\n2. ##############################################################################')
+    print('\n\n1. ##############################################################################')
     print('Sending heartbeat to module.')
     send_heartbeat(the_connection_drone)
     print('Waiting for heartbeat from module...')
@@ -102,11 +102,16 @@ if __name__ == '__main__':
     t_heartbeat = threading.Thread(target=heartbeat_thread, args=(the_connection_drone, 1.0), daemon=True)
     t_heartbeat.start()
 
+    print('\n\n!. ##############################################################################')
+    print('Changing drone MAV_STATE to MAV_STATE_ACTIVE.')
+    drone['active'] = True
+
     # Checking if module requests 'DATA_STREAM_POSITION'
-    print('\n\n3. ##############################################################################')
+    print('\n\n2. ##############################################################################')
     print("Checking if module requests 'DATA_STREAM_POSITION' with 'MAV_DATA_STREAM_POSITION")
 
     msg = the_connection_drone.recv_match(type='REQUEST_DATA_STREAM', blocking=True, timeout=test_timeout)
+    print(msg)
     if msg is None:
         print('NOT OK! No \'REQUEST_DATA_STREAM\' with \'MAV_DATA_STREAM_POSITION\'received from module.')
         the_connection_drone.close()
@@ -140,7 +145,7 @@ if __name__ == '__main__':
     t_global_position_int.start()
 
     # Checking if module sends 'SHEEP_RTT_DATA'.
-    print('\n\n4. ##############################################################################')
+    print('\n\n3. ##############################################################################')
     print("Checking if module sends 'SHEEP_RTT_DATA' or encapsulated 'SHEEP_RTT_DATA'.")
 
     msg = the_connection_drone.recv_match(type=['SHEEP_RTT_DATA', 'DATA64'], blocking=True, timeout=test_timeout*5)
@@ -171,8 +176,11 @@ if __name__ == '__main__':
         the_connection_drone.mav.send(msg_ack)
         print('Sending encapsulated SHEEP_RTT_ACK to module.')
 
+    # Avoid errors from an earlier SHEEP_RTT_DATA
+    msg = the_connection_drone.recv_match(type=['SHEEP_RTT_DATA', 'DATA64'], blocking=True, timeout=1)
+
     # Checking if module sends encapsulated 'SHEEP_RTT_DATA'.
-    print('\n\n5. ##############################################################################')
+    print('\n\n4. ##############################################################################')
     print("Checking if module increments 'SHEEP_RTT_DATA' seq after ack.")
 
     msg = the_connection_drone.recv_match(type=['SHEEP_RTT_DATA', 'DATA64'], blocking=True, timeout=test_timeout*5)
@@ -195,49 +203,54 @@ if __name__ == '__main__':
         the_connection_gcs.close()
         exit()
 
+    param_count = None
+
     # Getting module parameter by id.
-    print('\n\n6. ##############################################################################')
+    print('\n\n5. ##############################################################################')
     print("Getting module parameter by id")
     # Start parameter related testing
-    the_connection_drone.mav.param_request_read_send(1, 99, str.encode('param1_int'), -1)  # Test get parameter by id
+    the_connection_drone.mav.param_request_read_send(1, 99, str.encode('1 vector weight'), -1)  # Test get parameter by id
     msg = the_connection_drone.recv_match(type='PARAM_VALUE', blocking=True, timeout=test_timeout)
     if msg is None:
         print('NOT OK! PARAM_VALUE not received.')
         the_connection_drone.close()
         the_connection_gcs.close()
         exit()
-    elif msg.param_id != 'param1_int' or \
-        msg.param_value != 1.0 or \
+    elif msg.param_id != '1 vector weight' or \
+        msg.param_value != 0.0 or \
         msg.param_type != mavutil.mavlink.MAV_PARAM_TYPE_INT32 or \
-        msg.param_count != 2 or \
-        msg.param_index != 0:
+        msg.param_index != 1:
         print('NOT OK! PARAM_VALUE contains wrong values. Expected:\n '
-              'PARAM_VALUE {param_id : param1_int, param_value : 1.0, param_type : 6, param_count : 2, param_index : 0}\n'
+              'PARAM_VALUE {param_id : 1 vector weight, param_value : 0.0, param_type : 6, param_count : ??, param_index : 1}\n'
               'Received:\n', msg)
-        #print(msg)
         the_connection_drone.close()
         the_connection_gcs.close()
         exit()
     print('OK! Correct PARAM_VALUE received.')
+    param_count = msg.param_count
 
     # Getting module parameter by index.
-    print('\n\n7. ##############################################################################')
+    print('\n\n6. ##############################################################################')
     print("Getting module parameter by index")
 
-    the_connection_drone.mav.param_request_read_send(1, 99, str.encode(''), 1)  # Test get parameter by index
-    msg = the_connection_drone.recv_match(type='PARAM_VALUE', blocking=True, timeout=test_timeout)
+    for t in range(3):
+        the_connection_drone.mav.param_request_read_send(1, 99, str.encode(''), 1)  # Test get parameter by index
+        msg = the_connection_drone.recv_match(type='PARAM_VALUE', blocking=True, timeout=test_timeout)
+        if msg is not None:
+            break
+
     if msg is None:
         print('NOT OK! PARAM_VALUE not received.')
         the_connection_drone.close()
         the_connection_gcs.close()
         exit()
-    elif msg.param_id != 'param2_float' or \
-            msg.param_value != 1.100000023841858 or \
-            msg.param_type != mavutil.mavlink.MAV_PARAM_TYPE_REAL32 or \
-            msg.param_count != 2 or \
+    elif msg.param_id != '1 vector weight' or \
+            msg.param_value != 0.0 or \
+            msg.param_type != mavutil.mavlink.MAV_PARAM_TYPE_INT32 or \
+            msg.param_count != param_count or \
             msg.param_index != 1:
         print('NOT OK! PARAM_VALUE contains wrong values. Expected:\n '
-              'PARAM_VALUE {param_id : param2_float, param_value : 1.100000023841858, param_type : 9, param_count : 2, param_index : 1}\n'
+              'PARAM_VALUE {param_id : 1 vector weight, param_value : 0.0, param_type : 6, param_count : ', param_count, ', param_index : 1}\n'
               'Received:\n', msg)
 
         the_connection_drone.close()
@@ -246,10 +259,15 @@ if __name__ == '__main__':
     print('OK! Correct PARAM_VALUE received.')
 
     # Getting all module parameters.
-    print('\n\n8. ##############################################################################')
+    print('\n\n7. ##############################################################################')
     print("Getting all module parameters.")
-    the_connection_drone.mav.param_request_list_send(1, 99)  # Test get all parameter
-    msg = the_connection_drone.recv_match(type='PARAM_VALUE', blocking=True, timeout=test_timeout)
+
+    for t in range(3):
+        the_connection_drone.mav.param_request_list_send(1, 99)  # Test get all parameter
+        msg = the_connection_drone.recv_match(type='PARAM_VALUE', blocking=True, timeout=test_timeout)
+        if msg is not None:
+            break
+
     if msg is None:
         print('NOT OK! PARAM_VALUE not received.')
         the_connection_drone.close()
@@ -262,7 +280,7 @@ if __name__ == '__main__':
         for i in range(values_received, values_count):
             msg = the_connection_drone.recv_match(type='PARAM_VALUE', blocking=True, timeout=test_timeout)
             values_received += 1
-            sleep(0.2)
+            sleep(0.02)
 
         if values_received != values_count:
             print('NOT OK! Received {} of {} values.'.format(values_received, values_count))
@@ -273,22 +291,26 @@ if __name__ == '__main__':
     print('OK! All PARAM_VALUEs received.')
 
     # Setting module parameter.
-    print('\n\n9 .##############################################################################')
+    print('\n\n8 .##############################################################################')
     print("Setting module parameter")
-    the_connection_drone.mav.param_set_send(1, 99, str.encode('param1_int'), 2, mavutil.mavlink.MAV_PARAM_TYPE_INT32)  # Test set a single parameter
-    msg = the_connection_drone.recv_match(type='PARAM_VALUE', blocking=True, timeout=test_timeout)
+    for t in range(3):
+        the_connection_drone.mav.param_set_send(1, 99, str.encode('param1_int'), 1, mavutil.mavlink.MAV_PARAM_TYPE_INT32)  # Test set a single parameter
+        msg = the_connection_drone.recv_match(type='PARAM_VALUE', blocking=True, timeout=test_timeout)
+        if msg is not None:
+            break
+
     if msg is None:
         print('NOT OK! PARAM_VALUE not received.')
         the_connection_drone.close()
         the_connection_gcs.close()
         exit()
-    elif msg.param_id != 'param1_int' or \
-            msg.param_value != 2 or \
+    elif msg.param_id != '1 vector weight' or \
+            msg.param_value != 1 or \
             msg.param_type != mavutil.mavlink.MAV_PARAM_TYPE_INT32 or \
-            msg.param_count != 2 or \
-            msg.param_index != 0:
+            msg.param_count != param_count or \
+            msg.param_index != 1:
         print('NOT OK! PARAM_VALUE contains wrong values. Expected:\n '
-              'PARAM_VALUE {param_id : param1_int, param_value : 1.0, param_type : 6, param_count : 2, param_index : 0}\n'
+              'PARAM_VALUE {param_id : 1 vector weight, param_value : 1.0, param_type : 6, param_count : ', param_count, ', param_index : 1}\n'
               'Received:\n', msg)
 
         the_connection_drone.close()

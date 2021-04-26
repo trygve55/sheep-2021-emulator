@@ -10,8 +10,8 @@ def send_heartbeat(the_connection):
                 mavutil.mavlink.MAV_MODE_FLAG_STABILIZE_ENABLED + \
                 mavutil.mavlink.MAV_MODE_FLAG_CUSTOM_MODE_ENABLED
     custom_mode = 0
-    system_status = mavutil.mavlink.MAV_STATE_ACTIVE if drone['active'] \
-        else mavutil.mavlink.MAV_STATE_STANDBY
+    system_status = mavutil.mavlink.MAV_STATE_ACTIVE #if drone['active'] \
+        #else mavutil.mavlink.MAV_STATE_STANDBY
 
     the_connection.mav.heartbeat_send(
         type=mavutil.mavlink.MAV_TYPE_QUADROTOR,
@@ -58,7 +58,7 @@ if __name__ == '__main__':
         'vx': 20,  # cm/s
         'vy': 95,  # cm/s
         'vz': 0,  # cm/s
-        'active': False,
+        'active': True,
         'request_data_stream_position': {
             'request_system': None,  # What system to send gps information.
             'request_component': None,  # What component to send gps information.
@@ -77,11 +77,11 @@ if __name__ == '__main__':
         move_drone(drone, time_delta=new_move - last_move)
         last_move = new_move
 
-        if time() > last_heartbeat + 1:
+        if time() > last_heartbeat + 1.03:
             last_heartbeat = time()
             send_heartbeat(the_connection)
 
-        if time() > last_send_position + 1.5:
+        if time() > last_send_position + 0.3:
             last_send_position = time()
             send_data_stream_position(the_connection)
 
@@ -89,6 +89,10 @@ if __name__ == '__main__':
 
         if msg is None:
             sleep(0.02)
+            continue
+
+        # Ignore non recognised messages
+        if msg.get_type() == 'BAD_DATA':
             continue
 
         if msg.name == 'REQUEST_DATA_STREAM' and \

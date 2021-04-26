@@ -32,8 +32,8 @@ class Params:
     def __init__(self):
         self.parameters = OrderedDict()
         self.parameters_type = OrderedDict()
-        self.add_param('param1_int', 1, mavutil.mavlink.MAV_PARAM_TYPE_INT32)
-        self.add_param('param2_float', 1.1, mavutil.mavlink.MAV_PARAM_TYPE_REAL32)
+        self.add_param('0 vector weight', 0, mavutil.mavlink.MAV_PARAM_TYPE_INT32)
+        self.add_param('1 vector weight', 0, mavutil.mavlink.MAV_PARAM_TYPE_INT32)
 
     def add_param(self, param_id, value, param_type):
         self.parameters[param_id] = value
