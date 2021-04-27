@@ -177,7 +177,8 @@ if __name__ == '__main__':
         print('Sending encapsulated SHEEP_RTT_ACK to module.')
 
     # Avoid errors from an earlier SHEEP_RTT_DATA
-    msg = the_connection_drone.recv_match(type=['SHEEP_RTT_DATA', 'DATA64'], blocking=True, timeout=1)
+    for i in range(10):
+        msg = the_connection_drone.recv_match(type=['SHEEP_RTT_DATA', 'DATA64'], blocking=True, timeout=0.2)
 
     # Checking if module sends encapsulated 'SHEEP_RTT_DATA'.
     print('\n\n4. ##############################################################################')
@@ -209,8 +210,12 @@ if __name__ == '__main__':
     print('\n\n5. ##############################################################################')
     print("Getting module parameter by id")
     # Start parameter related testing
-    the_connection_drone.mav.param_request_read_send(1, 99, str.encode('1 vector weight'), -1)  # Test get parameter by id
-    msg = the_connection_drone.recv_match(type='PARAM_VALUE', blocking=True, timeout=test_timeout)
+    for t in range(3):
+        the_connection_drone.mav.param_request_read_send(1, 99, str.encode('1 vector weight'), -1)  # Test get parameter by id
+        msg = the_connection_drone.recv_match(type='PARAM_VALUE', blocking=True, timeout=test_timeout)
+        if msg is not None:
+            break
+
     if msg is None:
         print('NOT OK! PARAM_VALUE not received.')
         the_connection_drone.close()
@@ -276,9 +281,11 @@ if __name__ == '__main__':
     else:
         values_received = 1
         values_count = msg.param_count
+        print(msg)
 
         for i in range(values_received, values_count):
             msg = the_connection_drone.recv_match(type='PARAM_VALUE', blocking=True, timeout=test_timeout)
+            print(msg)
             values_received += 1
             sleep(0.02)
 
@@ -294,7 +301,7 @@ if __name__ == '__main__':
     print('\n\n8 .##############################################################################')
     print("Setting module parameter")
     for t in range(3):
-        the_connection_drone.mav.param_set_send(1, 99, str.encode('param1_int'), 1, mavutil.mavlink.MAV_PARAM_TYPE_INT32)  # Test set a single parameter
+        the_connection_drone.mav.param_set_send(1, 99, str.encode('packet count'), 1, mavutil.mavlink.MAV_PARAM_TYPE_INT32)  # Test set a single parameter
         msg = the_connection_drone.recv_match(type='PARAM_VALUE', blocking=True, timeout=test_timeout)
         if msg is not None:
             break
@@ -304,13 +311,13 @@ if __name__ == '__main__':
         the_connection_drone.close()
         the_connection_gcs.close()
         exit()
-    elif msg.param_id != '1 vector weight' or \
-            msg.param_value != 1 or \
+    elif msg.param_id != 'packet count' or \
+            msg.param_value != 5.605193857299268e-45 or \
             msg.param_type != mavutil.mavlink.MAV_PARAM_TYPE_INT32 or \
             msg.param_count != param_count or \
-            msg.param_index != 1:
+            msg.param_index != 13:
         print('NOT OK! PARAM_VALUE contains wrong values. Expected:\n '
-              'PARAM_VALUE {param_id : 1 vector weight, param_value : 1.0, param_type : 6, param_count : ', param_count, ', param_index : 1}\n'
+              'PARAM_VALUE {param_id : packet count, param_value : 1.0, param_type : 6, param_count : ', param_count, ', param_index : 13}\n'
               'Received:\n', msg)
 
         the_connection_drone.close()
