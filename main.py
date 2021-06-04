@@ -204,13 +204,13 @@ if __name__ == '__main__':
 
             if not encapsulation:
                 # Send the sheepRTT data packet directly.
-                the_connection.mav.sheep_rtt_data_send(seq, lat, lon, alt, dist, sheep_id)
+                the_connection.mav.sheep_rtt_data_send(seq, 0, lat, lon, alt, dist, sheep_id)
 
                 print('Sent sheep_rtt_data with seq:' + str(seq))
             else:
                 # Pack sheepRTT data packet inside a data64 packet and send it. With zero padding.
                 try: 
-                    sheep_rtt_data_packet = the_connection.mav.sheep_rtt_data_encode(seq, lat, lon, alt, dist, sheep_id, rssi).pack(the_connection.mav) + \
+                    sheep_rtt_data_packet = the_connection.mav.sheep_rtt_data_encode(seq, 0, lat, lon, alt, dist, sheep_id, rssi).pack(the_connection.mav) + \
                                             b'\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00'
                     the_connection.mav.data64_send(129, len(sheep_rtt_data_packet) - 32, sheep_rtt_data_packet)
                     print('Sent encapsulated sheep_rtt_data with seq:' + str(seq))
